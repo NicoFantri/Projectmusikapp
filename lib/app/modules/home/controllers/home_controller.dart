@@ -1,16 +1,29 @@
 import 'package:get/get.dart';
+import 'package:dio/dio.dart';
+import 'package:musicapp/app/data//services/network_service.dart';
 
 class HomeController extends GetxController {
-  // Simulasi data, kamu bisa menggantinya dengan data dari API
-  var trendingMusic = [
-    {'title': 'Rockabye', 'artist': 'Sean Paul & Anne-Marie'},
-    {'title': 'Bet You Think About Me', 'artist': 'Taylor Swift'},
-    {'title': 'Love Again', 'artist': 'Dua Lipa'}
-  ].obs;
+  var trendingMusic = [].obs;
 
-  var selectedTab = 0.obs; // Mengatur tab yang aktif
+  // Fetch Spotify trending music
+  Future<void> fetchTrendingMusic() async {
+    try {
+      Dio dio = NetworkService.initDio();
+      var response = await dio.get('playlists/{playlist_id}/tracks');
 
-  void changeTab(int index) {
-    selectedTab.value = index;
+      if (response.statusCode == 200) {
+        trendingMusic.value = response.data['items'];
+      } else {
+        print('Error: ${response.statusCode}');
+      }
+    } catch (e) {
+      print('Failed to fetch trending music: $e');
+    }
+  }
+
+  @override
+  void onInit() {
+    super.onInit();
+    fetchTrendingMusic(); // Fetch music when the controller is initialized
   }
 }

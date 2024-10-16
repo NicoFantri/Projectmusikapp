@@ -1,123 +1,185 @@
 import 'package:flutter/material.dart';
+import 'package:audioplayers/audioplayers.dart';
 
-class PlayerView extends StatelessWidget {
+class PlayerView extends StatefulWidget {
   final String title;
   final String artist;
   final String imageUrl;
+  final String? previewUrl;
 
-  const PlayerView({Key? key, required this.title, required this.artist, required this.imageUrl}) : super(key: key);
+  const PlayerView({
+    Key? key,
+    required this.title,
+    required this.artist,
+    required this.imageUrl,
+    this.previewUrl,
+  }) : super(key: key);
+
+  @override
+  _PlayerViewState createState() => _PlayerViewState();
+}
+
+class _PlayerViewState extends State<PlayerView> {
+  final AudioPlayer audioPlayer = AudioPlayer();
+  bool isPlaying = false;
+  Duration duration = Duration.zero;
+  Duration position = Duration.zero;
+
+  @override
+  void initState() {
+    super.initState();
+    setAudio();
+
+    audioPlayer.onPlayerStateChanged.listen((state) {
+      setState(() {
+        isPlaying = state == PlayerState.playing;
+      });
+    });
+
+    audioPlayer.onDurationChanged.listen((newDuration) {
+      setState(() {
+        duration = newDuration;
+      });
+    });
+
+    audioPlayer.onPositionChanged.listen((newPosition) {
+      setState(() {
+        position = newPosition;
+      });
+    });
+  }
+
+  void setAudio() {
+    if (widget.previewUrl != null) {
+      audioPlayer.setSourceUrl(widget.previewUrl!);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.white,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          icon: Icon(Icons.arrow_back, color: Colors.black),
           onPressed: () {
-            Navigator.pop(context);
+            Navigator.of(context).pop();
           },
         ),
-        title: const Text(
+        title: Text(
           'Player',
-          style: TextStyle(color: Colors.black, fontSize: 20),
+          style: TextStyle(color: Colors.black),
         ),
         centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.favorite_border, color: Colors.red),
-            onPressed: () {
-              // Add action for favorite button
-            },
+            icon: Icon(Icons.favorite_border, color: Colors.red),
+            onPressed: () {},
           ),
         ],
       ),
       body: Padding(
-        padding: const EdgeInsets.all(16.0),
+        padding: const EdgeInsets.symmetric(horizontal: 20.0),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
+            const SizedBox(height: 20),
             Text(
-              'Listening to',
+              "Listening to",
               style: TextStyle(
                 fontSize: 18,
-                color: Colors.grey[700],
+                color: Colors.grey[600],
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             ClipRRect(
-              borderRadius: BorderRadius.circular(16),
-              child: Image.asset(
-                imageUrl,
-                width: 250,
-                height: 250,
+              borderRadius: BorderRadius.circular(20),
+              child: Image.network(
+                widget.imageUrl,
+                height: 300,
+                width: 300,
                 fit: BoxFit.cover,
               ),
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 20),
             Text(
-              title,
-              style: const TextStyle(
+              widget.title,
+              style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
-                color: Colors.black,
               ),
+              textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
             Text(
-              artist,
-              style: const TextStyle(
-                fontSize: 18,
-                color: Colors.grey,
+              widget.artist,
+              style: TextStyle(
+                fontSize: 16,
+                color: Colors.grey[600],
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 30),
+            Slider(
+              activeColor: Colors.red,
+              inactiveColor: Colors.grey[300],
+              min: 0.0,
+              max: duration.inSeconds.toDouble(),
+              value: position.inSeconds.toDouble(),
+              onChanged: (value) {
+                final newPosition = Duration(seconds: value.toInt());
+                audioPlayer.seek(newPosition);
+              },
+            ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(formatTime(position)),
+                  Text(formatTime(duration)),
+                ],
               ),
             ),
-            const SizedBox(height: 32),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Text('2:36', style: TextStyle(color: Colors.grey)),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Slider(
-                    value: 0.5,
-                    onChanged: (value) {},
-                    activeColor: Colors.red,
-                    inactiveColor: Colors.grey,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                const Text('4:36', style: TextStyle(color: Colors.grey)),
-              ],
-            ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 30),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 IconButton(
-                  icon: const Icon(Icons.skip_previous, size: 36),
-                  onPressed: () {
-                    // Add action for previous button
-                  },
-                ),
-                Container(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.red,
-                  ),
-                  child: IconButton(
-                    icon: const Icon(Icons.pause, color: Colors.white, size: 36),
-                    onPressed: () {
-                      // Add action for play/pause button
-                    },
-                  ),
+                  icon: Icon(Icons.shuffle),
+                  color: Colors.black,
+                  onPressed: () {},
                 ),
                 IconButton(
-                  icon: const Icon(Icons.skip_next, size: 36),
+                  icon: Icon(Icons.skip_previous),
+                  color: Colors.black,
+                  iconSize: 36,
+                  onPressed: () {},
+                ),
+                IconButton(
+                  icon: Icon(isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled),
+                  color: Colors.red,
+                  iconSize: 64,
                   onPressed: () {
-                    // Add action for next button
+                    if (isPlaying) {
+                      audioPlayer.pause();
+                    } else {
+                      audioPlayer.resume();
+                    }
                   },
+                ),
+                IconButton(
+                  icon: Icon(Icons.skip_next),
+                  color: Colors.black,
+                  iconSize: 36,
+                  onPressed: () {},
+                ),
+                IconButton(
+                  icon: Icon(Icons.repeat),
+                  color: Colors.black,
+                  onPressed: () {},
                 ),
               ],
             ),
@@ -125,5 +187,18 @@ class PlayerView extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  String formatTime(Duration duration) {
+    String twoDigits(int n) => n.toString().padLeft(2, '0');
+    final minutes = twoDigits(duration.inMinutes.remainder(60));
+    final seconds = twoDigits(duration.inSeconds.remainder(60));
+    return "$minutes:$seconds";
+  }
+
+  @override
+  void dispose() {
+    audioPlayer.dispose();
+    super.dispose();
   }
 }

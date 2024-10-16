@@ -1,21 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
+import 'package:musicapp/app/data/model/artist.dart';
+import 'package:musicapp/app/data/model/artist_album.dart';
+import 'package:musicapp/app/data/model/track.dart';
+import 'package:musicapp/app/data/repository/music_repo.dart';
 import '../controllers/home_controller.dart';
-import '../controllers/profile_controller.dart';
-//import 'profile_view.dart';
 import 'drawer_menu.dart';
-import 'music_view.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'search_results_view.dart';
 import 'playerview.dart';
-
+import 'music_screen.dart';
 
 class HomeView extends GetView<HomeController> {
-  const HomeView({Key? key}) : super(key: key);
+  HomeView({Key? key}) : super(key: key);
+
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF5F5F5), // Light background color
+      backgroundColor: const Color(0xFFF5F5F5),
       appBar: _buildAppBar(),
       drawer: const DrawerMenu(),
       body: SingleChildScrollView(
@@ -24,8 +27,7 @@ class HomeView extends GetView<HomeController> {
           children: [
             _buildGreetingSection(),
             _buildSearchBar(),
-            _buildTrendingMusicSection(),
-            _buildTabSection(),
+            _buildArtistSection(),
           ],
         ),
       ),
@@ -37,7 +39,7 @@ class HomeView extends GetView<HomeController> {
       elevation: 0,
       backgroundColor: Colors.transparent,
       title: const Text(
-        'Musicku',
+        '',
         style: TextStyle(
           color: Colors.black87,
           fontSize: 23,
@@ -47,7 +49,7 @@ class HomeView extends GetView<HomeController> {
       actions: [
         GestureDetector(
           onTap: () {
-           // Get.to(() => const ProfileView());
+            // Navigate to ProfileView (implementation to be added)
           },
           child: const Padding(
             padding: EdgeInsets.all(8.0),
@@ -70,7 +72,7 @@ class HomeView extends GetView<HomeController> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: const [
           Text(
-            'Hello word',
+            'Hello world',
             style: TextStyle(
               fontSize: 30,
               fontWeight: FontWeight.bold,
@@ -89,26 +91,64 @@ class HomeView extends GetView<HomeController> {
 
   Widget _buildSearchBar() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      padding: const EdgeInsets.all(16.0),
       child: TextField(
+        controller: _searchController,
         decoration: InputDecoration(
-          hintText: 'Search your favorite',
-          hintStyle: TextStyle(color: Colors.grey[500]),
-          prefixIcon: const Icon(Icons.search, color: Colors.black54),
-          suffixIcon: const Icon(Icons.tune, color: Colors.black54),
-          border: const OutlineInputBorder(
-            borderRadius: BorderRadius.all(Radius.circular(30)),
-            borderSide: BorderSide.none,
+          hintText: 'Search for tracks',
+          suffixIcon: IconButton(
+            icon: const Icon(Icons.search),
+            onPressed: _performSearch,
           ),
-          filled: true,
-          fillColor: Colors.white,
-          contentPadding: const EdgeInsets.symmetric(vertical: 0),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(30),
+          ),
         ),
+        onSubmitted: (_) => _performSearch(),
       ),
     );
   }
 
-  Widget _buildTrendingMusicSection() {
+  void _performSearch() {
+    final query = _searchController.text;
+    if (query.isNotEmpty) {
+      Get.to(() => SearchResultsView(searchQuery: query));
+    }
+  }
+
+  Widget _buildArtistSection() {
+    return FutureBuilder<List<dynamic>>(
+      future: Future.wait([
+        MusicRepo.getArtists(), // Future to get artists
+        MusicRepo.getArtistAlbums(), // Future to get albums
+      ]),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        } else if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return const Center(child: Text('No artists or albums found'));
+        }
+
+        // snapshot.data![0] contains the list of artists
+        // snapshot.data![1] contains the list of albums
+        final artists = snapshot.data![0] as List<Artist>;
+        final albums = snapshot.data![1] as List<Albums>;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildTrendingMusicSection(albums), // Passing albums to the trending section
+            _buildTabSection(artists), // Passing artists to the tab section
+          ],
+        );
+      },
+    );
+  }
+
+
+  Widget _buildTrendingMusicSection(List<Albums> albums) {
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Column(
@@ -131,17 +171,11 @@ class HomeView extends GetView<HomeController> {
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 20),
           SingleChildScrollView(
             scrollDirection: Axis.horizontal,
             child: Row(
-              children: [
-                _buildImageBox('assets/images/music1.jpg'),
-                const SizedBox(width: 16),
-                _buildImageBox('assets/images/music2.jpg'),
-                const SizedBox(width: 16),
-                _buildImageBox('assets/images/music3.jpg'),
-              ],
+              children: albums.map((album) => _buildAlbumBox(album)).toList(),
             ),
           ),
         ],
@@ -149,7 +183,66 @@ class HomeView extends GetView<HomeController> {
     );
   }
 
-  Widget _buildTabSection() {
+  Widget _buildAlbumBox(Albums album) {
+    return GestureDetector(
+      onTap: () async {
+        // Fetch the artist for this album
+        Artist? artist = await _getArtistForAlbum(album);
+        if (artist != null) {
+          Get.to(() => MusicScreen(artist: artist));
+        }
+      },
+      child: Container(
+        width: 150, // Mengatur ukuran tetap untuk tiap item album
+        margin: const EdgeInsets.only(right: 16.0),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12.0),
+              child: Image.network(
+                album.images?.firstOrNull?.url ?? 'https://via.placeholder.com/150',
+                height: 150,
+                width: 150,
+                fit: BoxFit.cover,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              album.name ?? 'Unknown Album',
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            Text(
+              album.artists?.firstOrNull?.name ?? 'Unknown Artist',
+              style: const TextStyle(
+                fontSize: 12,
+                color: Colors.grey,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+
+  Future<Artist?> _getArtistForAlbum(Albums album) async {
+    if (album.artists?.isNotEmpty ?? false) {
+      String artistId = album.artists!.first.id!;
+      List<Artist> artists = await MusicRepo.getArtists();
+      return artists.firstWhereOrNull((artist) => artist.id == artistId);
+    }
+    return null;
+  }
+
+
+
+  Widget _buildTabSection(List<Artist> artists) {
     return DefaultTabController(
       length: 4,
       child: Column(
@@ -167,16 +260,10 @@ class HomeView extends GetView<HomeController> {
             indicatorColor: Colors.blueAccent,
           ),
           const SizedBox(height: 16),
-          // Wrap the TabBarView with SizedBox and adjust height to prevent overflow
           SizedBox(
-            height: 350, // Adjust height to prevent overflow
+            height: 350,
             child: TabBarView(
-              children: [
-                _buildSongList(),
-                _buildSongList(),
-                _buildSongList(),
-                _buildSongList(),
-              ],
+              children: List.generate(4, (index) => _buildSongList(artists)),
             ),
           ),
         ],
@@ -184,28 +271,46 @@ class HomeView extends GetView<HomeController> {
     );
   }
 
-  Widget _buildSongList() {
-    return SingleChildScrollView(
-      child: Column(
-        children: [
-          _buildSongItem(
-              'assets/images/50x50.png', 'Rockabye', 'Sean Paul & Anne-Marie',
-              '2:45 / 4:56'),
-          _buildSongItem(
-              'assets/images/50x50.png', 'Bet You Think About Me', 'Taylor Swift',
-              '2:45 / 4:56'),
-          _buildSongItem(
-              'assets/images/50x50.png', 'Love Again', 'Dua Lipa', '2:45 / 4:56'),
-        ],
-      ),
+  Widget _buildSongList(List<Artist> artists) {
+    return FutureBuilder<List<Tracks>>(
+      future: MusicRepo.getMultipleTopTrack(
+          artists.map((e) => e.id!).toList()),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        } else if (snapshot.hasError) {
+          return Center(child: Text('Error: ${snapshot.error}'));
+        } else if (!snapshot.hasData || snapshot.data!.isEmpty) {
+          return const Center(child: Text('No tracks found'));
+        }
+
+        final tracks = snapshot.data!;
+        return ListView.builder(
+          itemCount: tracks.length,
+          itemBuilder: (context, index) {
+            final track = tracks[index];
+            return _buildSongItem(
+              track.album?.images?.first.url ?? 'https://via.placeholder.com/50',
+              track.name ?? 'Unknown',
+              track.artists?.map((a) => a.name).join(', ') ?? 'Unknown Artist',
+              '${track.durationMs ?? 0 ~/ 60000}:${(track.durationMs ?? 0 % 60000 ~/ 1000).toString().padLeft(2, '0')}',
+              track.previewUrl,
+            );
+          },
+        );
+      },
     );
   }
 
-  Widget _buildSongItem(String imageUrl, String title, String artist, String duration) {
+  Widget _buildSongItem(String imageUrl, String title, String artist, String duration, String? previewUrl) {
     return GestureDetector(
       onTap: () {
-        // Navigate to the PlayerView screen with song details
-        Get.to(() => PlayerView(title: title, artist: artist, imageUrl: imageUrl));
+        Get.to(() => PlayerView(
+          title: title,
+          artist: artist,
+          imageUrl: imageUrl,
+          previewUrl: previewUrl,
+        ));
       },
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 16.0),
@@ -228,7 +333,7 @@ class HomeView extends GetView<HomeController> {
         child: Row(
           children: [
             CircleAvatar(
-              backgroundImage: AssetImage(imageUrl),
+              backgroundImage: NetworkImage(imageUrl),
               radius: 30,
             ),
             const SizedBox(width: 16),
@@ -257,19 +362,10 @@ class HomeView extends GetView<HomeController> {
             Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                IconButton(
-                  icon: const Icon(
-                    Icons.play_arrow,
-                    color: Colors.blueAccent,
-                    size: 28,
-                  ),
-                  onPressed: () {
-                    // Add action to play music
-                  },
-                ),
+                const Icon(Icons.access_time, color: Colors.black54),
                 Text(
                   duration,
-                  style: const TextStyle(color: Colors.black54, fontSize: 12),
+                  style: const TextStyle(fontSize: 12, color: Colors.black54),
                 ),
               ],
             ),
@@ -279,29 +375,16 @@ class HomeView extends GetView<HomeController> {
     );
   }
 
-
-  Widget _buildImageBox(String imageUrl) {
-    return GestureDetector(
-      onTap: () {
-        // Navigate to the MusicView screen with the appropriate details
-        Get.to(() => MusicView(imageUrl: imageUrl));
-      },
-      child: Container(
-        width: 150,
-        height: 150,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-          image: DecorationImage(
-            image: AssetImage(imageUrl),
-            fit: BoxFit.cover,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.grey.withOpacity(0.3),
-              blurRadius: 6,
-              offset: const Offset(0, 4),
-            ),
-          ],
+  Widget _buildImageBox(String? imageUrl) {
+    return Container(
+      margin: const EdgeInsets.only(right: 16.0),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12.0),
+        child: Image.network(
+          imageUrl ?? 'https://via.placeholder.com/150',
+          height: 100,
+          width: 100,
+          fit: BoxFit.cover,
         ),
       ),
     );
